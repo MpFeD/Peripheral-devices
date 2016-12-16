@@ -1,0 +1,621 @@
+/*
+ * This file is a template for the first Lab in the SESI-PERI module.
+ *
+ * It draws inspiration from Dom & Gert code on ELinux.org.
+ *
+ * Authors:
+ *   Julien Peeters <julien.peeters@lip6.fr>
+ */
+
+/*
+ * Headers that are required for printf and mmap.
+ */
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+/*
+ * Base of peripherals and base of GPIO controller.
+ */
+
+#define BCM2835_PERIPH_BASE     0x20000000
+#define BCM2835_GPIO_BASE       ( BCM2835_PERIPH_BASE + 0x200000 )
+
+/*
+ * Paging definitions.
+ */
+
+#define RPI_PAGE_SIZE           4096
+#define RPI_BLOCK_SIZE          4096
+
+/*
+ * Helper macros for accessing GPIO registers.
+ */
+
+#define GPIO_CONF_FUNC_REG( ptr, gpio ) \
+    *( (ptr) + ( (gpio) / 10 ) ) \
+
+#define GPIO_CONF_FUNC_INPUT_MASK( gpio ) \
+    ( ~( 0x7 << ( ( (gpio) % 10 ) * 3 ) ) ) \
+
+#define GPIO_CONF_FUNC_OUTPUT_MASK( gpio ) \
+    ( 0x1 << ( ( (gpio) % 10 ) * 3 ) ) \
+
+#define GPIO_CONF_AS_INPUT( ptr, gpio ) \
+    GPIO_CONF_FUNC_REG( ptr, gpio ) &= GPIO_CONF_FUNC_INPUT_MASK( gpio ) \
+
+#define GPIO_CONF_AS_OUTPUT( ptr, gpio ) \
+    do { \
+        GPIO_CONF_AS_INPUT( ptr, gpio ); \
+        GPIO_CONF_FUNC_REG( ptr, gpio ) |= \
+            GPIO_CONF_FUNC_OUTPUT_MASK( gpio ); \
+    } while ( 0 ) \
+
+#define GPIO_CONF_REG( ptr, addr, gpio ) \
+    *( (ptr) + ( ( (addr) / sizeof( uint32_t ) ) + ( (gpio) / 32 ) ) ) \
+
+#define GPIO_SET_REG( ptr, gpio ) \
+    GPIO_CONF_REG( ptr, 0x1c, gpio )
+
+#define GPIO_CLR_REG( ptr, gpio ) \
+    GPIO_CONF_REG( ptr, 0x28, gpio )
+
+#define GPIO_SET( ptr, gpio ) \
+    GPIO_SET_REG( ptr, gpio ) = 1 << ( (gpio) % 32 ) \
+
+#define GPIO_CLR( ptr, gpio ) \
+    GPIO_CLR_REG( ptr, gpio ) = 1 << ( (gpio) % 32 ) \
+
+#define GPIO_VALUE( ptr, gpio ) \
+    ( ( GPIO_CONF_REG( ptr, 0x34, gpio ) >> ( (gpio) % 32 ) ) & 0x1 ) \
+
+/*
+ * Setup the access to memory-mapped I/O.
+ */
+
+static int mmap_fd;
+
+int
+setup_gpio_mmap ( uint32_t volatile ** ptr )
+{
+    void * mmap_result;
+
+    mmap_fd = open ( "/dev/mem", O_RDWR | O_SYNC );
+
+    if ( mmap_fd < 0 ) {
+        return -1;
+    }
+
+    mmap_result = mmap (
+        NULL
+      , RPI_BLOCK_SIZE
+      , PROT_READ | PROT_WRITE
+      , MAP_SHARED
+      , mmap_fd
+      , BCM2835_GPIO_BASE );
+
+    if ( mmap_result == MAP_FAILED ) {
+        close ( mmap_fd );
+        return -1;
+    }
+
+    *ptr = ( uint32_t volatile * ) mmap_result;
+
+    return 0;
+}
+
+void
+teardown_gpio_mmap ( void * ptr )
+{
+    munmap ( ptr, RPI_BLOCK_SIZE );
+}
+
+void
+delay ( unsigned int milisec )
+{
+    struct timespec ts, dummy;
+    ts.tv_sec  = ( time_t ) milisec / 1000;
+    ts.tv_nsec = ( long ) ( milisec % 1000 ) * 1000000;
+    nanosleep ( &ts, &dummy );
+}
+
+#define min( a, b ) ( a < b ? a : b )
+#define max( a, b ) ( a < b ? b : a )
+
+/*
+ * Main program.
+ */
+
+#define GPIO_LED0   4
+#define GPIO_LED1   17
+#define GPIO_BTN0   18
+
+int
+main ( int argc, char **argv )
+{
+    int                 result;
+    int                 period, half_period;
+    uint32_t volatile * gpio_base = 0;
+
+    /* Retreive the mapped GPIO memory. */
+    result = setup_gpio_mmap ( &gpio_base );
+
+    if ( result < 0 ) {
+        printf ( "-- error: cannot setup mapped GPIO.\n" );
+        exit ( 1 );
+    }
+
+    period = 1000; /* default = 1Hz */
+    if ( argc > 1 ) {
+        period = atoi ( argv[1] );
+    }
+    half_period = period / 2;
+
+    /* Setup GPIO of LED0 to output. */
+    GPIO_CONF_AS_OUTPUT ( gpio_base, GPIO_LED0 );
+    GPIO_CONF_AS_OUTPUT ( gpio_base, GPIO_LED1 );
+    GPIO_CONF_AS_INPUT ( gpio_base, GPIO_BTN0 );
+     
+    printf ( "-- info: start blinking.\n" );
+
+    /* Blink led at frequency of 1Hz. */
+
+    while (1) {
+      
+      /*GPIO_SET ( gpio_base, GPIO_LED0 );
+       *delay ( half_period/2 );
+       *GPIO_SET ( gpio_base, GPIO_LED1 );
+       *delay ( half_period/2 );
+       *GPIO_CLR( gpio_base, GPIO_LED0 );
+       *delay ( half_period/2 );
+       *GPIO_CLR( gpio_base, GPIO_LED1 );
+       *GPIO_CLR( gpio_base, GPIO_LED0 );
+      
+       
+      GPIO_SET ( gpio_base, GPIO_BTN0 );
+      */
+
+      if(!GPIO_VALUE(gpio_base, GPIO_BTN0)){
+	GPIO_SET ( gpio_base, GPIO_LED0 );
+	delay ( half_period/16 );
+	GPIO_SET ( gpio_base, GPIO_LED1 );
+	GPIO_CLR( gpio_base, GPIO_LED0 );
+	delay ( half_period/16 );
+	GPIO_CLR( gpio_base, GPIO_LED1 );
+      }
+
+      //delay ( half_period );
+      //GPIO_CLR ( gpio_base, GPIO_BTN0 );
+    }
+    return 0;
+}
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <asm/io.h>
+#include <mach/platform.h>
+
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Charlie, 2015");
+MODULE_DESCRIPTION("Module, aussitot insere, aussitot efface");
+static int LED=2;
+module_param(LED, int, 0);
+MODULE_PARM_DESC(LED, "Nombre de led");
+
+/*
+ *
+ */
+
+struct gpio_s
+{
+    uint32_t gpfsel[7];
+    uint32_t gpset[3];
+    uint32_t gpclr[3];
+    uint32_t gplev[3];
+    uint32_t gpeds[3];
+    uint32_t gpren[3];
+    uint32_t gpfen[3];
+    uint32_t gphen[3];
+    uint32_t gplen[3];
+    uint32_t gparen[3];
+    uint32_t gpafen[3];
+    uint32_t gppud[1];
+    uint32_t gppudclk[3];
+    uint32_t test[1];
+}
+*gpio_regs = (struct gpio_s *)__io_address(GPIO_BASE);
+
+enum {FUN_INPUT, FUN_OUTPUT};
+
+static void gpio_fsel(int pin, int fun)
+{
+printk(KERN_DEBUG "fsel()\n");
+    uint32_t reg = pin / 10;
+    uint32_t bit = (pin % 10) * 3;
+    uint32_t mask = 0b111 << bit;
+    gpio_regs->gpfsel[reg] = (gpio_regs->gpfsel[reg] & ~mask) | ((fun << bit) & mask);
+}
+
+static void gpio_write(int pin, bool val)
+{
+    printk(KERN_DEBUG "toty write()\n");
+    if (val)
+        gpio_regs->gpset[pin / 32] = (1 << (pin % 32));
+    else
+        gpio_regs->gpclr[pin / 32] = (1 << (pin % 32));
+}
+
+
+static struct timer_list led_blink_timer;
+static int led_blink_period = 1000;
+
+static void led_blink_handler(unsigned long unused)
+{
+  printk(KERN_DEBUG "toty led blinkwrite()\n");
+    static bool on = false;
+    on = !on;
+    gpio_write(LED, on);
+    mod_timer(&led_blink_timer, jiffies + msecs_to_jiffies(led_blink_period));
+}
+
+/*
+ *
+ */
+
+static int 
+open_ledbtn(struct inode *inode, struct file *file) {
+    printk(KERN_DEBUG "open()\n");
+    return 0;
+}
+
+static ssize_t 
+read_ledbtn(struct file *file, char *buf, size_t count, loff_t *ppos) {
+    printk(KERN_DEBUG "read()\n");
+    return count;
+}
+
+static ssize_t 
+write_ledbtn(struct file *file, const char *buf, size_t count, loff_t *ppos) {
+    printk(KERN_DEBUG "write()\n");
+    return count;
+}
+
+static int 
+release_ledbtn(struct inode *inode, struct file *file) {
+    printk(KERN_DEBUG "close()\n");
+    return 0;
+}
+
+struct file_operations fops_ledbtn =
+  {
+    .open 	= open_ledbtn,
+    .read 	= read_ledbtn,
+    .write 	= gpio_write,
+    .release	= release_ledbtn
+  };
+
+static int __init mon_module_init(void)
+{
+  /*int major = register_chrdev(0, "ledbtn", &fops_ledbtn);*/
+  printk(KERN_DEBUG "Hello World !\n");
+  printk(KERN_DEBUG "LED=%d !\n", LED);
+
+
+ 
+  int result=0;
+
+  gpio_fsel(LED, FUN_OUTPUT); 
+  gpio_write(LED, 1);
+  setup_timer(&led_blink_timer, led_blink_handler, 0);
+  result = mod_timer(&led_blink_timer, jiffies + msecs_to_jiffies(led_blink_period));
+  BUG_ON(result < 0);
+  return 0;
+  
+}
+static void __exit mon_module_cleanup(void)
+{
+    gpio_fsel(LED, FUN_INPUT); 
+    del_timer(&led_blink_timer);
+   int major = register_chrdev(0, "ledbtn", &fops_ledbtn);
+   unregister_chrdev(major, "ledbtn");
+   printk(KERN_DEBUG "Goodbye World!\n");
+}
+
+
+module_init(mon_module_init);
+module_exit(mon_module_cleanup);
+/*******************************************************************************
+ * lcdr_user.c - Controleur pour LCd HD44780 ( 20x4 )
+ ******************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+
+/*******************************************************************************
+ * GPIO Pins
+ ******************************************************************************/
+
+#define RS 7
+#define E  8
+#define D4 22
+#define D5 23
+#define D6 24
+#define D7 25
+
+#define GPIO_INPUT  0
+#define GPIO_OUTPUT 1
+
+#define RPI_BLOCK_SIZE  0xB4
+#define RPI_GPIO_BASE   0x20200000
+
+//#define	lcd_strobe()((E = 1),(E=0)) 
+
+struct gpio_s
+{
+  uint32_t gpfsel[7];
+  uint32_t gpset[3];
+  uint32_t gpclr[3];
+  uint32_t gplev[3];
+  uint32_t gpeds[3];
+  uint32_t gpren[3];
+  uint32_t gpfen[3];
+  uint32_t gphen[3];
+  uint32_t gplen[3];
+  uint32_t gparen[3];
+  uint32_t gpafen[3];
+  uint32_t gppud[1];
+  uint32_t gppudclk[3];
+  uint32_t test[1];
+};
+volatile struct gpio_s* gpio_regs;
+
+/*******************************************************************************
+ * GPIO Operations 
+ ******************************************************************************/
+
+int gpio_setup ( void ){
+
+  int mmap_fd = open ("/dev/mem", O_RDWR | O_SYNC );
+  if ( mmap_fd < 0 ) {
+    return -1;
+  }
+
+  gpio_regs = mmap ( NULL, RPI_BLOCK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, RPI_GPIO_BASE );
+  if ( gpio_regs == MAP_FAILED ) {
+    close ( mmap_fd );
+    return -1;
+  }
+
+  return 0;
+}
+
+void  gpio_teardown ( void ){
+  munmap((void*)gpio_regs, RPI_BLOCK_SIZE);
+}
+
+
+void gpio_config(int gpio, int value)
+{
+  gpio_regs->gpfsel[gpio/10] = ( gpio_regs->gpfsel[gpio/10] & ~(0x7 << ((gpio % 10) * 3)) )
+                             | (value << ((gpio % 10) * 3));
+}
+
+void gpio_update(int gpio, int value)
+{
+  if( value )
+    gpio_regs->gpset[gpio/32] = (0x1 << (gpio % 32) );
+  else
+    gpio_regs->gpclr[gpio/32] = (0x1 << (gpio % 32) );
+}
+
+/*******************************************************************************
+ * LCD's Instructions ( source = doc )
+ ******************************************************************************/
+
+#define B_0000  0
+#define B_0001  1
+#define B_0010  2
+#define B_0011  3
+#define B_0100  4
+#define B_0101  5
+#define B_0110  6
+#define B_0111  7
+#define B_1000  8
+#define B_1001  9
+#define B_1010  a
+#define B_1011  b
+#define B_1100  c<<4
+#define B_1101  d
+#define B_1110  e
+#define B_1111  f
+
+#define __HEX(h,l) 0x##h##l
+#define _HEX(h,l)  __HEX(h,l)
+#define HEX(h,l)   _HEX(B_##h,B_##l)
+#define BIT(b,n)   (((n)>>(b))&1)
+
+/* commands */
+#define LCD_CLEARDISPLAY        HEX(0000,0001)
+#define LCD_RETURNHOME          HEX(0000,0010)
+#define LCD_ENTRYMODESET        HEX(0000,0100)
+#define LCD_DISPLAYCONTROL      HEX(0000,1000)
+#define LCD_CURSORSHIFT         HEX(0001,0000)
+#define LCD_FUNCTIONSET         HEX(0010,0000)
+#define LCD_SETCGRAMADDR        HEX(0100,0000)
+#define LCD_SETDDRAMADDR        HEX(1000,0000)
+
+/* flags for display entry mode : combine with LCD_ENTRYMODESET */
+#define LCD_EM_RIGHT            HEX(0000,0000)
+#define LCD_EM_LEFT             HEX(0000,0010)
+#define LCD_EM_DISPLAYSHIFT     HEX(0000,0001)
+#define LCD_EM_DISPLAYNOSHIFT   HEX(0000,0000)
+
+/* flags for display on/off control : combine with LCD_DISPLAYCONTROL */
+#define LCD_DC_DISPLAYON        HEX(0000,0100)
+#define LCD_DC_DISPLAYOFF       HEX(0000,0000)
+#define LCD_DC_CURSORON         HEX(0000,0010)
+#define LCD_DC_CURSOROFF        HEX(0000,0000)
+#define LCD_DC_BLINKON          HEX(0000,0001)
+#define LCD_DC_BLINKOFF         HEX(0000,0000)
+
+/* flags for display/cursor shift : combine with LCD_CURSORSHIFT */
+#define LCD_CS_DISPLAYMOVE      HEX(0000,1000)
+#define LCD_CS_CURSORMOVE       HEX(0000,0000)
+#define LCD_CS_MOVERIGHT        HEX(0000,0100)
+#define LCD_CS_MOVELEFT         HEX(0000,0000)
+
+/* flags for function set : combine with LCD_FUNCTIONSET */
+#define LCD_FS_8BITMODE         HEX(0001,0000)
+#define LCD_FS_4BITMODE         HEX(0000,0000)
+#define LCD_FS_2LINE            HEX(0000,1000)
+#define LCD_FS_1LINE            HEX(0000,0000)
+#define LCD_FS_5x10DOTS         HEX(0000,0100)
+#define LCD_FS_5x8DOTS          HEX(0000,0000)
+
+/*******************************************************************************
+ * LCD's Operations
+ ******************************************************************************/
+
+/* generate E signal */
+
+void lcd_set_cursor(int col, int row);
+
+void lcd_strobe(){
+	gpio_config(E, 1);
+	usleep(1); /*lol*/
+	gpio_config(E, 0);
+	usleep(1);	
+}
+
+
+
+static int cpt = 0;
+/* send 4bits to LCD */
+void lcd_write4bits(int data)
+{
+  /* first 4 bits */
+	//if((cpt++) == 3)
+  
+  gpio_update(D7, BIT(7,data));
+  gpio_update(D6, BIT(6,data));
+  gpio_update(D5, BIT(5,data));
+  gpio_update(D4, BIT(4,data));
+  lcd_strobe();
+
+  /* second 4 bits */
+  gpio_update(D7, BIT(3,data));
+  gpio_update(D6, BIT(2,data));
+  gpio_update(D5, BIT(1,data));
+  gpio_update(D4, BIT(0,data));
+  lcd_strobe();
+}
+
+void lcd_command(int cmd)
+{
+  gpio_update(RS, 0);
+  lcd_write4bits(cmd);
+  usleep(2000); /* ça prend du temps */
+}
+
+void lcd_data(int character)
+{
+  gpio_update(RS, 1);
+  lcd_write4bits(character);
+}
+
+/* initialization */
+void lcd_init()
+{
+  gpio_update(E, 0);
+  lcd_command(HEX(0011,0011)); /* initialization */
+  lcd_command(HEX(0011,0010)); /* initialization */
+  lcd_command(LCD_FUNCTIONSET    | LCD_FS_4BITMODE | LCD_FS_2LINE | LCD_FS_5x8DOTS);
+  lcd_command(LCD_DISPLAYCONTROL | LCD_DC_DISPLAYON | LCD_DC_CURSORON | LCD_DC_CURSOROFF);
+  lcd_command(LCD_ENTRYMODESET   | LCD_EM_LEFT | LCD_EM_DISPLAYNOSHIFT);
+}
+
+void lcd_clear()
+{
+  lcd_command(LCD_CLEARDISPLAY);
+  lcd_command(LCD_RETURNHOME);
+}
+
+void lcd_message(char* txt)
+{
+  int i, j;
+  for(i=0; i<20 && i<strlen(txt); i++){
+    lcd_data(txt[i]);
+  }
+}
+
+void lcd_set_cursor(int col, int row){
+	int row_offsets[] = {0x00, 0x40, 0x14, 0x54};
+  	lcd_command(LCD_SETDDRAMADDR | (col + row_offsets[row]));
+}
+
+/*******************************************************************************
+ * Finally, the main function
+ ******************************************************************************/
+int main(int argc, char** argv)
+{
+  /* arg */
+  if( argc < 2 ){
+    fprintf(stderr, "ERROR: must take a string as argument\n");
+    exit(1);
+  }
+
+  /* Retreive the mapped GPIO memory */
+  if( gpio_setup() == -1 ){
+    perror("ERROR: gpio_setup\n");
+    exit(1);
+  }
+
+  /* Setting up GPIOs to output */
+  gpio_config(RS, GPIO_OUTPUT);
+  gpio_config(E , GPIO_OUTPUT);
+  gpio_config(D4, GPIO_OUTPUT);
+  gpio_config(D5, GPIO_OUTPUT);
+  gpio_config(D6, GPIO_OUTPUT);
+  gpio_config(D7, GPIO_OUTPUT);
+
+  /* initialization */
+  lcd_init();
+
+  /* default test direction */
+  lcd_command(LCD_ENTRYMODESET | LCD_EM_LEFT | LCD_EM_DISPLAYNOSHIFT);
+
+  lcd_clear();
+
+  if(argc == 2){
+    lcd_set_cursor(0, 0);
+    lcd_message(argv[1]);
+  }
+  if(argc == 3){
+    lcd_set_cursor(0, 1);
+    lcd_message(argv[2]);
+  }
+
+  if(argc == 4){
+    lcd_set_cursor(0, 2);
+    lcd_message(argv[3]);
+  }
+
+  /* Release the GPIO memory mapping */
+  gpio_teardown();
+
+  return 0;
+}

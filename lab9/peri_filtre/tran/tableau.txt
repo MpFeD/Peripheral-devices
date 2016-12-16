@@ -1,0 +1,61 @@
+=====================
+=== test_filterNR ===
+=====================
+----------------
+--- test_fir ---
+----------------
+sigma noise = 10.0
+X1_GN_10.txt -> PSNR =    25.31 db
+radius = 2
+F32(r=2) PSNR =  42.37 db
+I16(r=2) PSNR =  42.28 db
+lambda = 51
+Q8(r=2) PSNR =  42.28 db
+lambda = 204
+Q10(r=2) PSNR =  42.28 db
+G(s=1.4) PSNR =  43.08 db
+IIR(alpha=0.4) PSNR =  47.92 db
+IIR(alpha=0.4,q=8) PSNR =  12.03 db
+IIR(alpha=0.4,q=8) PSNR =  12.03 db
+bye ...
+
+
+=====================
+=== test_filterNR ===
+=====================
+----------------
+--- test_fir ---
+----------------
+sigma noise = 5.0
+X1_GN_05.txt -> PSNR =    36.80 db
+radius = 2
+F32(r=2) PSNR =  85.15 db
+I16(r=2) PSNR =  76.91 db
+Q8(r=2) PSNR =  76.91 db
+Q10(r=2) PSNR =  76.91 db
+G(s=1.4) PSNR =  86.99 db
+IIR(alpha=0.4) PSNR = 100.12 db
+IIR(alpha=0.4,q=8) PSNR = 100.12 db
+IIR(alpha=0.4,q=8) PSNR =  12.03 db
+bye ...
+
+
+=====================
+=== test_filterNR ===
+=====================
+----------------
+--- test_fir ---
+----------------
+sigma noise = 15.0
+X1_GN_15.txt -> PSNR =    21.44 db
+radius = 2
+F32(r=2) PSNR =  32.59 db
+I16(r=2) PSNR =  32.97 db
+Q8(r=2) PSNR =  32.97 db
+Q10(r=2) PSNR =  32.97 db
+G(s=1.4) PSNR =  32.98 db
+IIR(alpha=0.4) PSNR =  36.39 db
+IIR(alpha=0.4,q=8) PSNR =  36.39 db
+IIR(alpha=0.4,q=8) PSNR =  12.03 db
+bye ...
+

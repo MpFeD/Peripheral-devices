@@ -1,0 +1,34 @@
+#logo img {
+	float: left;
+	margin: 0px 0px 0px 0px;
+}
+
+h2 {
+   padding-left: 1em;
+}
+
+h3 {
+   padding-left: 2em;
+}
+
+form#search {
+	clear: none;
+}
+
+div#main {
+	clear: both;
+}
+
+.nav {
+	width: auto;
+	margin-left: auto;
+}
+
+textarea.wikitext {
+    font-family: monospace;
+}
+a[href="/trac/dev/about"] ,
+a[href="/trac/dev/roadmap"] {
+display: none;
+}
+

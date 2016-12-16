@@ -1,0 +1,90 @@
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+#define MAX_BUF 1024
+
+
+int main(){
+	
+	int	fd1, fd2,fd3,fd4, i;
+	char *myfifo = "/dev/stdin";
+	char buf[MAX_BUF];
+
+	/* open, read, and display the message from the FIFO */
+	fd1 = open(myfifo, O_RDONLY);
+	
+
+	while(1){
+		memset(buf,'\0',sizeof(buf));
+		read(fd1, buf, MAX_BUF);
+		if(!strcmp(buf,"end\n"))
+			break;
+		else
+			printf("%s", buf);
+	}	
+	
+	
+	
+	char *f2s = "/tmp/f2s";
+	mkfifo(f2s, 0666);
+	fd3 = open(f2s, O_WRONLY);
+	for(i=0; i<5; i++) {
+        char buf[80];
+        int len=sprintf(buf, "hello %d fois from c\n", i+1);
+		write(fd3, buf, len);
+		sleep(1);
+	}
+	write(fd3, "end\n", sizeof("end\n"));
+
+	
+	
+	
+	char *s2f = "/tmp/s2f";
+	fd4 = open(myfifo, O_RDONLY);
+	while(1){
+		memset(buf,'\0',sizeof(buf));
+		read(fd4, buf, MAX_BUF);
+		if(!strcmp(buf,"end\n"))
+			break;
+		else
+			printf("%s", buf);
+	}	
+	
+	
+	
+	
+	
+	
+	
+ 	 char *stdoutt= "/dev/stdout";	
+	/* create the FIFO (named pipe) */
+	mkfifo(stdoutt, 0666);
+
+	/* write "Hi" to the FIFO */
+	fd2 = open(stdoutt, O_WRONLY);
+    for(i=0; i<5; i++) {
+        char    buf[80];
+        int len=sprintf(buf, "hello %d fois from c\n", i+1);
+		write(fd2, buf, len);
+		sleep(1);
+	}
+	write(fd2, "end\n", sizeof("end\n"));
+	
+	
+	
+	
+	close(fd1);
+	close(fd2);
+	close(fd3);	
+	close(fd4);
+
+	/* remove the FIFO */
+	unlink(myfifo);	
+	unlink(stdoutt);
+
+	return 0;
+}
